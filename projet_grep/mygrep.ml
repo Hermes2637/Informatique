@@ -37,29 +37,30 @@ let char_list_to_regex c =
           aux q e1 (Some (Automate.Lettre h))
         else begin Printf.printf "Invalid syntax\n"; process (Stdlib.open_in "help.txt") (Printf.printf "%s\n%!"); exit 0 end
       end
-      else if h = '\' then begin escaped := true; aux q e1 e2 end
-      else if h = '?' then begin
-        if e1 = None then begin Printf.printf "Invalid syntax\n"; process (Stdlib.open_in "help.txt") (Printf.printf "%s\n%!"); exit 0 end
-        else if e2 = None then aux q (Some (Automate.Union (e1, Automate.Epsilon))) e2
-        else aux q e1 (Some (Automate.Union (e2, Automate.Epsilon)))
+      else if h = '\\' then begin escaped := true; aux q e1 e2 end
+      else if h = '?' then begin match e1, e2 with
+        | None, _ -> begin Printf.printf "Invalid syntax\n"; process (Stdlib.open_in "help.txt") (Printf.printf "%s\n%!"); exit 0 end
+        | Some e, None -> aux q (Some (Automate.Union (e, Automate.Epsilon))) None
+        | Some e01, Some e02 -> aux q e1 (Some (Automate.Union (e02, Automate.Epsilon)))
       end
-      else if h = '*' then begin
-        if e1 = None then begin Printf.printf "Invalid syntax\n"; process (Stdlib.open_in "help.txt") (Printf.printf "%s\n%!"); exit 0 end
-        else if e2 = None then aux q (Some (Automate.Kleene e1)) e2
-        else aux q e1 (Some (Automate.Kleene e2))
+      else if h = '*' then begin match e1, e2 with
+        | None, _ -> begin Printf.printf "Invalid syntax\n"; process (Stdlib.open_in "help.txt") (Printf.printf "%s\n%!"); exit 0 end
+        | Some e, None -> aux q (Some (Automate.Kleene e)) None
+        | Some e01, Some e02 -> aux q e1 (Some (Automate.Kleene e02))
       end
-      else if h = '+' then begin
-        if e1 = None then begin Printf.printf "Invalid syntax\n"; process (Stdlib.open_in "help.txt") (Printf.printf "%s\n%!"); exit 0 end
-        else if e2 = None then aux q (Some (Automate.Concat ((Automate.Kleene e1), e1))) e2
-        else aux q e1 (Some (Automate.Concat ((Automate.Kleene e2), e2)))
+      else if h = '+' then begin match e1, e2 with
+        | None, _ -> begin Printf.printf "Invalid syntax\n"; process (Stdlib.open_in "help.txt") (Printf.printf "%s\n%!"); exit 0 end
+        | Some e, None -> aux q (Some (Automate.Concat ((Automate.Kleene e), e))) None
+        | Some e01, Some e02 -> aux q e1 (Some (Automate.Concat ((Automate.Kleene e02), e02)))
       end
-      else if h = '|' then begin
-        if e1 = None || e2 = None then begin Printf.printf "Invalid syntax\n"; process (Stdlib.open_in "help.txt") (Printf.printf "%s\n%!"); exit 0 end
-        else aux q (Some (Automate.Union (e1, e2))) None
+      else if h = '|' then begin match e1, e2 with
+        | None, _ | _, None -> begin Printf.printf "Invalid syntax\n"; process (Stdlib.open_in "help.txt") (Printf.printf "%s\n%!"); exit 0 end
+        | Some e01, Some e02 -> aux q (Some (Automate.Union (e01, e02))) None
       end
-      else if h = '@' then begin
-        if e1 = None || e2 = None then begin Printf.printf "Invalid syntax\n"; process (Stdlib.open_in "help.txt") (Printf.printf "%s\n%!"); exit 0 end
-        else aux q (Some (Automate.Concat (e1, e2))) None
+      else if h = '@' then begin match e1, e2 with
+        | None, _ | _, None -> begin Printf.printf "Invalid syntax\n"; process (Stdlib.open_in "help.txt") (Printf.printf "%s\n%!"); exit 0 end
+        | Some e01, Some e02 -> aux q (Some (Automate.Concat (e01, e02))) None
+      end
       else begin
         if e1 = None then
           aux q (Some (Automate.Lettre h)) e2
@@ -69,6 +70,15 @@ let char_list_to_regex c =
       end
   in aux c None None
 
+let execute_automaton (a : Automate.automate) u =
+  let rec dstar q v = match v with
+  | [] -> q
+  | e::t -> dstar (Hashtbl.find a.transitions (q, e)) t
+  in let v = string_to_char_list u in
+  try begin
+    let f = dstar a.initial v in
+    List.mem f a.terminaux
+  end with Not_found -> false
 
 let main () =
   (* Vérification de la présence de la regex *)
@@ -83,6 +93,10 @@ let main () =
     process help (Printf.printf "%s\n%!");
     exit 0
   end;
+  (* Création de l'automate *)
+  let reg = Sys.argv.(1) in
+  let true_reg = char_list_to_regex (string_to_char_list reg) in
+  let auto = Automate.determinise true_reg in
   (* Choix du flux d'entrée; entrée standard par défaut *)
   let input =
     if argc = 3 then begin
@@ -90,8 +104,9 @@ let main () =
     end else
       Stdlib.stdin
   in Printf.printf "Searching %s in %s\n\n%!" Sys.argv.(1) (if argc = 3 then Sys.argv.(2) else "stdin");
-  (* process input Automate.search;  *)
-  (* À corriger une fois le nom obtenu *)
+  (* Exécution de l'automate *)
+  process input (fun s -> if execute_automaton auto s then Printf.printf "%s\n%!" s);
+
   if argc = 3 then Stdlib.close_in input
 
 let () = main ()
