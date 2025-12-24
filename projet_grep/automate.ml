@@ -156,7 +156,7 @@ let automate n exp_lin =
   let ter = Array.make (n+1) false in
   ter.(0) <- a_eps exp_lin;
   List.iter (fun x -> ter.(x.id)<- true) (calcul_S exp_lin);
-  let fact = Array.make (n+1) (Array.make (n+1) false) in
+  let fact = Array.make_matrix (n+1) (n+1) false in
   List.iter (fun (x,y) -> fact.(x.id).(y.id) <- true) (calcul_F exp_lin);
   List.iter (fun x -> fact.(0).(x.id) <- true) (calcul_P exp_lin);
   let a = { nb_etats = n; 
@@ -257,6 +257,6 @@ let determinise exp =
   construire();
   
   {nb_etats = Hashtbl.length deja_vu;
-  initial = 0;
+  initial = 1;
   terminaux = !final;
   transitions = transitions}
